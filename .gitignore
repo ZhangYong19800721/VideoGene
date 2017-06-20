@@ -13,4 +13,8 @@
 *.bak
 *.png
 *.jpeg
+*.class
+*.properties
+*.mf
+*.xml
 
