@@ -1,7 +1,7 @@
 clear all;
 close all;
 
-N = 1e5;
+N = 1e3;
 [x1,x2,l] = GenerateData(N);
 data.x1 = x1;
 data.x2 = x2;
