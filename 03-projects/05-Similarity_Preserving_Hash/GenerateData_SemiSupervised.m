@@ -6,7 +6,9 @@ function [data, similar_pairs] = GenerateData_SemiSupervised(N)
     
     for i = 1:N
         for j = (i+1):N
-            if abs(norm(data(:,i)) - norm(data(:,j))) <= 10
+            if data(2,i) < 100 && data(2,j) < 100
+                similar_pairs = [similar_pairs [i,j]'];
+            elseif data(2,i) >= 100 && data(2,j) >= 100
                 similar_pairs = [similar_pairs [i,j]'];
             end
         end
