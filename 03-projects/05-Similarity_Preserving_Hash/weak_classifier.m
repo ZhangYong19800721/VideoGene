@@ -13,8 +13,8 @@ classdef weak_classifier
     end
     
     methods
-        function c = do(points1,points2)
-            c = 4 * (obj.logistic_func(points1) - 0.5) .* (obj.logistic_func(points2) - 0.5);
+        function c = do(obj, points1,points2)
+            c = 4 * (obj.logistic_func.do(points1) - 0.5) .* (obj.logistic_func.do(points2) - 0.5);
         end
     end
 end

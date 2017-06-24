@@ -28,11 +28,13 @@ classdef SimilarityPreservingHash
             
             [D,N] = size(data.points);   % D表示数据的维度，N表示数据点个数
             [~,P] = size(data.similar);  % P表示数据对的个数
-            weight = ones(1,P) ./ P;
+            weight = ones(1,P) ./ P;     % 权值向量
+            max_it = 1e5;                % 最大迭代次数
+            learn_rate = 0.0001;         % 学习速度
             
-            A = eye(D);    % 将A初始化为一个全0方阵
-            B = ones(1,D); % 将B初始化为一个全1向量
-            C = 0;         % 将C初始化为0
+            A = zeros(D);                      % 将A初始化为一个全0方阵
+            B = sign(randn(1,D));              % 将B初始化为一个随机正负1向量
+            C = 0;                             % 将C初始化为0
             f_func = @(x)f_quadratic(x,A,B,C); % 得到f函数
             f_value  = f_func(data.points);    % 对所有的数据点计算f函数的值
             C = -1 * median(f_value);          % 将C设定为f函数值序列的中位数
@@ -47,6 +49,8 @@ classdef SimilarityPreservingHash
                 for it = 1:max_it
                     h_func = logistic(f_func,r);       % 绑定gamma参数，得到h函数（或更新h函数）
                     weak_c = weak_classifier(h_func);  % 绑定h函数，得到弱分类器（或更新弱分类器）
+                    Cp = weak_c.do(data.points(:,data.similar(1,:)),data.points(:,data.similar(2,:)));
+                    Rm = sum(weight .* data.similar(3,:) .* Cp)
                     
                     % 计算梯度
                     h_value  = h_func.do(data.points);
