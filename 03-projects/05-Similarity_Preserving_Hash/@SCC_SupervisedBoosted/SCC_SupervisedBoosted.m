@@ -1,5 +1,5 @@
-classdef SCC_AdaBoost
-    %UNTITLED AdaBoost类，实现AdaBoost算法
+classdef SCC_SupervisedBoosted
+    %UNTITLED SCC_SupervisedBoosted类，实现SCC_SupervisedBoosted算法
     %   
     
     properties
@@ -8,16 +8,16 @@ classdef SCC_AdaBoost
     end
     
     methods
-        function obj = SCC_AdaBoost()
-            hypothesis = [];
-            alfa = [];
+        function obj = SCC_SupervisedBoosted()
+            obj.hypothesis = [];
+            obj.alfa = [];
         end
     end
     
     methods
         obj  = train(obj,data,weight,num_weak)
         y    = predict(obj,points1,points2)
-        c    = hashcode(obj,points) 
+        C    = hashcode(obj,points) 
     end
 end
 
