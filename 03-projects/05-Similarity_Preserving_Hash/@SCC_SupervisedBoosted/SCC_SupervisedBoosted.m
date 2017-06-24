@@ -1,5 +1,5 @@
 classdef SCC_SupervisedBoosted
-    %UNTITLED SCC_SupervisedBoosted类，实现SCC_SupervisedBoosted算法
+    %SCC_SupervisedBoosted SCC_SupervisedBoosted类
     %   
     
     properties
@@ -16,7 +16,6 @@ classdef SCC_SupervisedBoosted
     
     methods
         obj  = train(obj,data,weight,num_weak)
-        y    = predict(obj,points1,points2)
         C    = hashcode(obj,points) 
     end
 end

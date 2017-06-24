@@ -14,7 +14,7 @@ function obj = train(obj,data,weight,num_weak)
     
     XD = []; XT = [];
     for d = 1:D
-        v = any_function(data.points,d);
+        v = f_axis_parallel(data.points,d);
         u = unique(v); u = sort(u); Nu = length(u); %去除v中的重复数据,排序
         delta = (u(2:Nu) - u(1:(Nu-1))) / 2; Nd = length(delta);
         T = [u(1)-delta(1), u(1:Nd) + delta, u(Nu)+delta(Nd)]; %计算得到所有可能的threshold
@@ -28,14 +28,14 @@ function obj = train(obj,data,weight,num_weak)
         r = zeros(1,K); % 选择一个弱分类器使r最大
         
         for k = 1:K
-            weak_classifer = SCC_WeakClassifier(@any_function,XD(k),XT(k)); % 使用f函数和threshold即可得到一个弱分类器
+            weak_classifer = SCC_WeakClassifier(@f_axis_parallel,XD(k),XT(k)); % 使用f函数和threshold即可得到一个弱分类器
             c = weak_classifer.predict(data.points(:,data.similar(1,:)),data.points(:,data.similar(2,:)));
             r(k) = weight * (data.similar(3,:) .* c)';
         end
         
         [r_max,r_idx] = max(r); d_best = XD(r_idx); t_best = XT(r_idx);
         if r_max >= 1 % 代表当前的弱分类器恰好能对所有的训练样例正确分类
-            weak_classifer_best = SCC_WeakClassifier(@any_function,d_best,t_best);
+            weak_classifer_best = SCC_WeakClassifier(@f_axis_parallel,d_best,t_best);
             obj.hypothesis{1+length(obj.hypothesis)} = weak_classifer_best;
             obj.alfa = [obj.alfa 1];
             break;
@@ -45,7 +45,7 @@ function obj = train(obj,data,weight,num_weak)
             alfa = 0.5 * log((1+r_max)/(1-r_max)); 
         end
         
-        weak_classifer_best = SCC_WeakClassifier(@any_function,d_best,t_best);
+        weak_classifer_best = SCC_WeakClassifier(@f_axis_parallel,d_best,t_best);
         obj.hypothesis{1+length(obj.hypothesis)} = weak_classifer_best;
         obj.alfa = [obj.alfa alfa];
  
