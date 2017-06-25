@@ -96,6 +96,9 @@ classdef SimilarityPreservingHash
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
                         elseif (Rm_window_ave - Rm_window_ave_old) < 1e-4
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                            if (Rm_window_ave - Rm_window_ave_old) < 1e-5
+                                learn_rate_current = learn_rate_min;   
+                            end
                         end
                         Rm_window_ave_old = Rm_window_ave;
                     end
