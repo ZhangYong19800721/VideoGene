@@ -25,7 +25,7 @@ classdef SimilarityPreservingHash
             %   输出：
             %   obj：训练后的SimilarityPreservingHash对象
             
-            ob_window_size = 500;
+            ob_window_size = 100;
             [D,N] = size(data.points);   % D表示数据的维度，N表示数据点个数
             [~,P] = size(data.similar);  % P表示数据对的个数
             weight = ones(1,P) ./ P;     % 权值向量
@@ -99,10 +99,10 @@ classdef SimilarityPreservingHash
                     if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                        elseif Rm_window_ave / Rm_window_ave_old < (1+1e-1)
+                        elseif Rm_window_ave - Rm_window_ave_old < 1e-5
                             % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                            if Rm_window_ave / Rm_window_ave_old < (1+1e-2)
+                            if Rm_window_ave - Rm_window_ave_old < 1e-6
                                 % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
                                 learn_rate_current = learn_rate_min;   
                             end
@@ -151,7 +151,8 @@ classdef SimilarityPreservingHash
                     C = C + velocity_Rm_C;
                 end
                 
-                Rm_max = sum(weight .* data.similar(3,:) .* sign(c));
+                %Rm_max = sum(weight .* data.similar(3,:) .* sign(c));
+                Rm_max = Rm;
                 if Rm_max >= 1
                     obj.hypothesis{1+length(obj.hypothesis)} = h_func;
                     obj.alfa = [obj.alfa 1];
