@@ -15,8 +15,193 @@ classdef SimilarityPreservingHash
     end
     
     methods
-        function obj  = train(obj,data,num_weak)
-            %TRAIN 训练SimilarityPreservingHash模型
+        function obj = train(obj,data,num_weak,select)
+            if strcmp(select,'supervised')
+                obj = train_supervised(obj,data,num_weak);
+            elseif strcmp(select,'semisupervised')
+                obj = train_semisupervised(obj,data,num_weak);
+            else
+                disp('error! please choose correct select parameters, "supervised" or "semisupervised"');
+            end
+        end
+        
+        function obj = train_semisupervised(obj,data,num_weak)
+            %train_semisupervised 训练SimilarityPreservingHash模型
+            %   输入：
+            %   data：训练数据，data.points表示数据点，data.similar包含[i j
+            %         s]'，其中i和j表示point数组的下标，s表示两个元素是否相似。
+            %         半监督学习只使用标记为相似的数据对。
+            %   num_weak：表示弱分类器的个数
+            %
+            %   输出：
+            %   obj：训练后的SimilarityPreservingHash对象
+            
+            data.similar = data.similar(:,data.similar(3,:)>0); % 去掉标记为不相似的数据对，只保留标记为相似的数据对
+            
+            ob_window_size = 100;
+            [D,N] = size(data.points);   % D表示数据的维度，N表示数据点个数
+            [~,P] = size(data.similar);  % P表示相似数据对的个数
+            weight1 = ones(1,P)./(2*P);  % 相似数据对的权值向量
+            weight2 = ones(1,N)./(2*N);  % 无标签数据的权值向量
+            max_it = 1e4;                % 最大迭代次数
+            learn_rate_max = 1e-1;       % 最大学习速度
+            learn_rate_min = 1e-6;       % 最小学习速度            
+            momentum = 0.5;              % 初始化动量倍率为0.5
+            
+            K1 = repmat(1:N,N-1,1); K2 = repmat((1:N)',1,N); K3 = diag(1:N); 
+            K2 = K2 - K3; K2 = K2(K2~=0); K2 = reshape(K2,N-1,N);
+            
+            for m = 1:num_weak % 迭代开始
+                ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
+                A = randn(D);                      % 将A初始化为一个全0方阵
+                B = randn(1,D);                    % 将B初始化
+                f_func = F_Quadratic(A,B,0);       % 初始化f函数
+                f_value = f_func.do(data.points);  % 对所有的数据点计算f函数的值
+                C = -1 * median(f_value);          % 将C初始化
+                f_func = F_Quadratic(A,B,C);       % 初始化f函数
+                f_value  = f_func.do(data.points); % 对所有的数据点计算f函数的值
+                max_f_value = max(f_value);        % 得到最大值
+                min_f_value = min(f_value);        % 得到最小值
+                r = log((1 - 0.999) / 0.999) / min(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
+                
+                % 找到一个使得（3.22）式中的r最大化的弱分类器
+                velocity_Rm_A = zeros(size(A));
+                velocity_Rm_B = zeros(size(B));
+                velocity_Rm_C = zeros(size(C));
+                learn_rate_current = learn_rate_max;                % 学习速度初始化为最大学习速度
+                Rm_record = ones(1,ob_window_size); flag = false;   % Rm_record用来记录迭代过程中的Rm值
+                
+                for it = 1:max_it                    
+                    f_func = F_Quadratic(A,B,C);       % 更新f函数
+                    h_func = H_Func(f_func,r);         % 绑定gamma参数，得到h函数（或更新h函数）
+                    weak_c = WeakClassifier(h_func);   % 绑定h函数，得到弱分类器（或更新弱分类器）
+                    
+                    % 对所有的相似数据对执行弱分类
+                    c1 = weak_c.do(data.points(:,data.similar(1,:)),data.points(:,data.similar(2,:))); 
+                    Rm1 = weight1 * c1';
+                    
+                    % 对所有的非标签数据执行弱分类
+                    c2 = zeros(N-1,N);
+                    for j = 1:N
+                        c2(:,j) = weak_c.do(data.points(:,K1(:,j)),data.points(:,K2(:,j))); 
+                    end
+                    Rm2 = weight2 * (sum(c2) ./ (N-1))';
+                    
+                    % 计算Rm值
+                    Rm = Rm1 - Rm2;
+                    
+                    if learn_rate_current == learn_rate_min 
+                        break; % 当学习速度下降到最小学习速度时，停止迭代
+                    end
+                    
+                    if flag == false
+                        Rm_record = Rm * Rm_record;   % 利用第一次计算得到的Rm值初始化Rm_record
+                        Rm_window_ave_old = Rm - 100; % 初始化旧的窗口平均值
+                        flag = true;
+                    end
+                    
+                    Rm_record(mod(it,ob_window_size)+1) = Rm; % 记录当前的Rm值到Rm_record数组中
+                    Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
+                    
+                    if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
+                        if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
+                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                        elseif Rm_window_ave - Rm_window_ave_old < 1e-4
+                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                            if Rm_window_ave - Rm_window_ave_old < 1e-5
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
+                                learn_rate_current = learn_rate_min;   
+                            end
+                        end
+                        Rm_window_ave_old = Rm_window_ave;
+                    end
+                    
+                    description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
+                    description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
+                    ob = ob.showit([Rm Rm_window_ave]',description);
+                    
+                    % 计算梯度
+                    h_value       = h_func.do(data.points);         % 计算所有数据点的h函数值
+                    gradient_h_C  = h_value .* (h_value - 1) * r;   % 计算h函数对C的偏导数
+                    
+                    %parfor n = 1:N 
+                    gradient_h_A = cell(1,N); gradient_h_B = cell(1,N);
+                    for n = 1:N 
+                        gradient_h_A{n} = gradient_h_C(n) * data.points(:,n) * data.points(:,n)'; % 计算h函数对A的偏导数
+                        gradient_h_B{n} = gradient_h_C(n) * data.points(:,n)';                    % 计算h函数对B的偏导数
+                    end
+                    
+                    gradient_Rm1_A = zeros(D); gradient_Rm1_B = zeros(1,D); gradient_Rm1_C = 0;
+                    for p = 1:P
+                        x1_idx = data.similar(1,p); x2_idx = data.similar(2,p);
+                        % 计算c函数对A、B、C的偏导数
+                        gradient_c_A = 4 * (gradient_h_A{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_A{x2_idx} * (h_value(x1_idx) - 0.5));
+                        gradient_c_B = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5));
+                        gradient_c_C = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
+                    
+                        gradient_Rm1_A = gradient_Rm1_A + weight1(p) * gradient_c_A;
+                        gradient_Rm1_B = gradient_Rm1_B + weight1(p) * gradient_c_B;
+                        gradient_Rm1_C = gradient_Rm1_C + weight1(p) * gradient_c_C;
+                    end
+                    
+                    gradient_Rm2_A = zeros(D); gradient_Rm2_B = zeros(1,D); gradient_Rm2_C = 0; % 初始化Rm2对A、B、C的梯度值
+                    for j = 1:N
+                        gradient_Q_A = zeros(D); gradient_Q_B = zeros(1,D); gradient_Q_C = 0;
+                        for i = 1:(N-1)
+                            x1_idx = K1(i,j); x2_idx = K2(i,j);
+                            gradient_c_A = 4 * (gradient_h_A{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_A{x2_idx} * (h_value(x1_idx) - 0.5)); 
+                            gradient_c_B = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5)); 
+                            gradient_c_C = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
+                            
+                            gradient_Q_A = gradient_Q_A + gradient_c_A;
+                            gradient_Q_B = gradient_Q_B + gradient_c_B;
+                            gradient_Q_C = gradient_Q_C + gradient_c_C;
+                        end
+                        
+                        gradient_Rm2_A = gradient_Rm2_A + weight2(j) * gradient_Q_A / (N-1);
+                        gradient_Rm2_B = gradient_Rm2_B + weight2(j) * gradient_Q_B / (N-1);
+                        gradient_Rm2_C = gradient_Rm2_C + weight2(j) * gradient_Q_C / (N-1);
+                    end
+                    
+                    gradient_Rm_A = gradient_Rm1_A - gradient_Rm2_A; 
+                    gradient_Rm_B = gradient_Rm1_B - gradient_Rm2_B; 
+                    gradient_Rm_C = gradient_Rm1_C - gradient_Rm2_C;
+                    
+                    momentum = min([momentum * 1.01,0.9]); % 动量倍率最大为0.9，初始值为0.5，大约迭代60步之后动量倍率达到0.9。
+                    velocity_Rm_A = momentum * velocity_Rm_A + learn_rate_current * gradient_Rm_A;
+                    velocity_Rm_B = momentum * velocity_Rm_B + learn_rate_current * gradient_Rm_B;
+                    velocity_Rm_C = momentum * velocity_Rm_C + learn_rate_current * gradient_Rm_C;
+                    
+                    A = A + velocity_Rm_A;
+                    B = B + velocity_Rm_B;
+                    C = C + velocity_Rm_C;
+                end
+                
+                Rm_max = weight1 * sign(c1)' - weight2 * (sum(sign(c2)) ./ (N-1))';
+                if Rm_max >= 1
+                    obj.hypothesis{1+length(obj.hypothesis)} = h_func;
+                    obj.alfa = [obj.alfa 1];
+                    break;
+                elseif Rm_max <= 0
+                    break;                   
+                else
+                    current_alfa = 0.5 * log((1+Rm_max)/(1-Rm_max));
+                end
+                
+                obj.hypothesis{1+length(obj.hypothesis)} = h_func;
+                obj.alfa = [obj.alfa current_alfa];
+                
+                weight1 = weight1 .* exp(-1 * current_alfa * sign(c1));
+                weight1 = weight1 ./ (2 * sum(weight1));
+                
+                weight2 = weight2 .* exp(current_alfa * sum(c2) / (N-1));
+                weight2 = weight2 ./ (2 * sum(weight2));
+            end
+        end
+        
+        function obj = train_supervised(obj,data,num_weak)
+            %train_supervised 训练SimilarityPreservingHash模型
             %   输入：
             %   data：训练数据，data.points表示数据点，data.similar包含[i j
             %         s]'，其中i和j表示point数组的下标，s表示两个元素是否相似
@@ -36,33 +221,11 @@ classdef SimilarityPreservingHash
             
             for m = 1:num_weak % 迭代开始
                 ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
-                
-%                 XD = []; XT = [];
-%                 for d = 1:D
-%                     v = axis(data.points,d,0);
-%                     u = unique(v); u = sort(u); Nu = length(u); %去除v中的重复数据,排序
-%                     delta = (u(2:Nu) - u(1:(Nu-1))) / 2; Nd = length(delta);
-%                     T = [u(1)-delta(1), u(1:Nd) + delta, u(Nu)+delta(Nd)]; %计算得到所有可能的threshold
-%                     XD = [XD d*ones(1,length(T))];
-%                     XT = [XT T];
-%                 end
-%                 K = length(XD); % XD或XT的长度代表了所有可能的选择维度和门限
-%                 Rm = zeros(1,K); % 选择一个弱分类器使Rm最大
-%                 % parfor k = 1:K
-%                 for k = 1:K
-%                     f_func = F_Axis(XD(k),-1 * XT(k)); 
-%                     h_func = H_Func(f_func,1.0); 
-%                     weak_classifer = WeakClassifier(h_func); % 得到一个弱分类器
-%                     c = weak_classifer.do(data.points(:,data.similar(1,:)),data.points(:,data.similar(2,:)));
-%                     Rm(k) = weight * (data.similar(3,:) .* sign(c))';
-%                 end
-%                 [Rm_max,Rm_max_idx] = max(Rm); d_best = XD(Rm_max_idx); t_best = XT(Rm_max_idx);
-                
-                A = randn(D);                       % 将A初始化为一个全0方阵
-                B = randn(1,D);                     % 将B初始化
+                A = randn(D); %A = eye(D);                      % 将A初始化为一个全0方阵
+                B = randn(1,D); %B = zeros(1,D);                    % 将B初始化
                 f_func = F_Quadratic(A,B,0);       % 初始化f函数
                 f_value = f_func.do(data.points);  % 对所有的数据点计算f函数的值
-                C = -1 * median(f_value);          % 将C初始化
+                C = -1 * median(f_value); %C = -1 * 50.^2;         % 将C初始化
                 f_func = F_Quadratic(A,B,C);       % 初始化f函数
                 f_value  = f_func.do(data.points); % 对所有的数据点计算f函数的值
                 max_f_value = max(f_value);        % 得到最大值
@@ -99,10 +262,10 @@ classdef SimilarityPreservingHash
                     if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                        elseif Rm_window_ave - Rm_window_ave_old < 1e-5
+                        elseif Rm_window_ave - Rm_window_ave_old < 1e-4
                             % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                            if Rm_window_ave - Rm_window_ave_old < 1e-6
+                            if Rm_window_ave - Rm_window_ave_old < 1e-5
                                 % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
                                 learn_rate_current = learn_rate_min;   
                             end
@@ -151,8 +314,7 @@ classdef SimilarityPreservingHash
                     C = C + velocity_Rm_C;
                 end
                 
-                %Rm_max = sum(weight .* data.similar(3,:) .* sign(c));
-                Rm_max = Rm;
+                Rm_max = sum(weight .* data.similar(3,:) .* sign(c));
                 if Rm_max >= 1
                     obj.hypothesis{1+length(obj.hypothesis)} = h_func;
                     obj.alfa = [obj.alfa 1];

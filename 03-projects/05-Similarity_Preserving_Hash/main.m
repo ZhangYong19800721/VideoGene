@@ -1,15 +1,14 @@
 clear all;
 close all;
 
-rng(4);
+rng(5);
 M = 500;
 [points,similar] = GenerateData(M);
 data.points  = points;
 data.similar = similar;
-N = length(data.similar);
 
 sph = SimilarityPreservingHash();
-sph = sph.train(data,10);
+sph = sph.train(data,10,'semisupervised');
 
 save('sph.mat','sph');
 
