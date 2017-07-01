@@ -1,12 +1,10 @@
 clear all;
 close all;
 
-image = imread('000073602.jpg');
-image = rgb2ycbcr(image);
+image_base_dir = 'D:\VideoGene\02-TrainData\imagebasev3\';
+file_type = '*.jpg';
 
-load VisualVocabulary_UV.mat;
-load VisualVocabulary_Y.mat;
+nucleotide = ConstructNucleotideData(image_base_dir,file_type);
 
-extractor = VisualNucleotideExtractor(VisualVocabulary_Y,VisualVocabulary_UV);
+save('nucleotide.mat','nucleotide');
 
-nucleotide = extractor.Extract(image);

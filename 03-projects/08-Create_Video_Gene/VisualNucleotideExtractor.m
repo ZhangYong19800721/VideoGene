@@ -20,10 +20,10 @@ classdef VisualNucleotideExtractor
             image = imresize(image,320/width);     % 将图像缩减到宽度为320个像素
             [height,width,~] = size(image);        % 重新获取图像的大小
             alfa = 0.55;
-            image_quadrant{1} = image( 1               :alfa * height, 1               :alfa * width,:); 
-            image_quadrant{2} = image((1-alfa) * height:       height, 1               :alfa * width,:);
-            image_quadrant{3} = image( 1               :alfa * height,(1-alfa) * width :       width,:);
-            image_quadrant{4} = image((1-alfa) * height:       height,(1-alfa) * width :       width,:);
+            image_quadrant{1} = image(1:floor(alfa*height), 1:floor(alfa*width),:); 
+            image_quadrant{2} = image(floor((1-alfa)*height):height, 1:floor(alfa*width),:);
+            image_quadrant{3} = image(1:floor(alfa*height),floor((1-alfa)*width):width,:);
+            image_quadrant{4} = image(floor((1-alfa)*height):height,floor((1-alfa)*width):width,:);
             
             [~,NY] = size(obj.vvl); [~,NU] = size(obj.vvc); [~,NV] = size(obj.vvc);
             
