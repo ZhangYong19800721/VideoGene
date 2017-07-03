@@ -401,6 +401,7 @@ classdef SimilarityPreservingHashLinear
                     Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
                     
                     if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
+                        r = 1.1 * r;
                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
                         elseif Rm_window_ave - Rm_window_ave_old < 1e-4

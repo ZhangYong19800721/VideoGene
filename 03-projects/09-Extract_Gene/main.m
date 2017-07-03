@@ -1,7 +1,7 @@
 clear all;
 close all;
 
-rng(16);
+rng(3);
 M = 1000;
 [points,similar] = GenerateData(M);
 data.points  = points;
