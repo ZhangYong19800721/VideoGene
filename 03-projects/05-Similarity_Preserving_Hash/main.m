@@ -8,7 +8,7 @@ data.points  = points;
 data.similar = similar;
 
 sph = SimilarityPreservingHash();
-sph = sph.train(data,10,'semisupervised');
+sph = sph.train(data,10,'semisupervised_partial');
 
 save('sph.mat','sph');
 
