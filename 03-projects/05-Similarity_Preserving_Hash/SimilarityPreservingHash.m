@@ -64,7 +64,7 @@ classdef SimilarityPreservingHash
                 f_value  = f_func.do(data.points); % 对所有的数据点计算f函数的值
                 max_f_value = max(f_value);        % 得到最大值
                 min_f_value = min(f_value);        % 得到最小值
-                r = log((1 - 0.999) / 0.999) / min(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
+                r = log((1 - 0.999) / 0.999) / max(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
                 
                 % 找到一个使得（3.22）式中的r最大化的弱分类器
                 velocity_Rm_A = zeros(size(A));
@@ -108,15 +108,17 @@ classdef SimilarityPreservingHash
                     Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
                     
                     if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
-                        r = 1.1 * r;
                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                        elseif Rm_window_ave - Rm_window_ave_old < 1e-4
-                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                            if Rm_window_ave - Rm_window_ave_old < 1e-5
-                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
-                                learn_rate_current = learn_rate_min;   
+                        else
+                            r = 1.1 * r;
+                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                                if Rm_window_ave - Rm_window_ave_old < 1e-5
+                                    % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
+                                    learn_rate_current = learn_rate_min;   
+                                end
                             end
                         end
                         Rm_window_ave_old = Rm_window_ave;
