@@ -2,7 +2,7 @@ clear all;
 close all;
 
 rng('shuffle')
-load sph_semisupervised.mat;
+load sph.mat;
 
 M = 2e4;
 points = 200 * rand(2,M);
@@ -12,7 +12,7 @@ code = sph.hashcode(points);
 query = 200 * rand(2,1) - [100 100]';
 query_code = sph.hashcode(query);
 query_code = repmat(query_code,1,M);
-match_idx = (sph.alfa * xor(query_code,code)) <= 0.00;
+match_idx = (sph.alfa * xor(query_code,code)) <= 0.05;
 
 figure;
 plot(points(1,:),points(2,:),'go');

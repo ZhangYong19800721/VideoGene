@@ -21,19 +21,22 @@ classdef SimilarityPreservingHash
             elseif strcmp(select,'semisupervised')
                 obj = train_semisupervised(obj,data,num_weak);
             elseif strcmp(select,'semisupervised_partial')
-                obj = train_semisupervised_partial(obj,data,num_weak,0.5);
+                obj = train_semisupervised_partial(obj,data,num_weak,0.05,1e-6,1e4,0.25);
             else
                 disp('error! please choose correct select parameters, "supervised" or "semisupervised"');
             end
         end
         
-        function obj = train_semisupervised_partial(obj,data,num_weak,percent)
+        function obj = train_semisupervised_partial(obj,data,num_weak,learn_rate_max,learn_rate_min,max_it,percent)
             %train_semisupervised_partial 训练SimilarityPreservingHash模型
             %   输入：
             %   data：训练数据，data.points表示数据点，data.similar包含[i j
             %         s]'，其中i和j表示point数组的下标，s表示两个元素是否相似。
             %         半监督学习只使用标记为相似的数据对。
             %   num_weak：表示弱分类器的个数
+            %   max_it:   最大迭代次数
+            %   learn_rate_max: 最大学习速度
+            %   learn_rate_min: 最小学习速度     
             %
             %   输出：
             %   obj：训练后的SimilarityPreservingHash对象
@@ -45,9 +48,6 @@ classdef SimilarityPreservingHash
             [~,P] = size(data.similar);  % P表示相似数据对的个数
             weight1 = ones(1,P)./(2*P);  % 相似数据对的权值向量
             weight2 = ones(1,N)./(2*N);  % 无标签数据的权值向量
-            max_it = 1e4;                % 最大迭代次数
-            learn_rate_max = 1e-1;       % 最大学习速度
-            learn_rate_min = 1e-6;       % 最小学习速度            
             momentum = 0.5;              % 初始化动量倍率为0.5
             
             K1 = repmat(1:N,N-1,1); K2 = repmat((1:N)',1,N); K3 = diag(1:N); 
@@ -78,18 +78,18 @@ classdef SimilarityPreservingHash
                     h_func = H_Func(f_func,r);         % 绑定gamma参数，得到h函数（或更新h函数）
                     weak_c = WeakClassifier(h_func);   % 绑定h函数，得到弱分类器（或更新弱分类器）
                     
-                    % 对所有的相似数据对执行弱分类
+                    % 对所有的相似数据对执行弱分类      
                     c1 = weak_c.do(data.points(:,data.similar(1,:)),data.points(:,data.similar(2,:))); 
                     Rm1 = weight1 * c1';
                     
-                    % 对所有的非标签数据执行弱分类
-%                     c2 = zeros(N-1,N);
-%                     for j = 1:N
-%                         c2(:,j) = weak_c.do(data.points(:,K1(:,j)),data.points(:,K2(:,j))); 
-%                     end
-                    
-                    c2 = weak_c.do(data.points(:,K1),data.points(:,K2)); c2 = reshape(c2,N-1,N);
-                    Rm2 = weight2 * (sum(c2) ./ (N-1))';
+                    % 对部分的非标签数据执行弱分类
+                    Ns = floor(percent * (N-1)); c2 = zeros(Ns,N);  
+                    for j = 1:N
+                        sequence = randperm(N-1,Ns);
+                        c2(:,j) = weak_c.do(data.points(:,K1(sequence,j)),data.points(:,K2(sequence,j)));
+                    end
+                    % c2 = weak_c.do(data.points(:,K1),data.points(:,K2)); c2 = reshape(c2,N-1,N);
+                    Rm2 = weight2 * (sum(c2) ./ Ns)';
                     
                     % 计算Rm值
                     Rm = Rm1 - Rm2;
@@ -131,7 +131,6 @@ classdef SimilarityPreservingHash
                     h_value       = h_func.do(data.points);         % 计算所有数据点的h函数值
                     gradient_h_C  = h_value .* (h_value - 1) * r;   % 计算h函数对C的偏导数
                     
-                    %parfor n = 1:N 
                     gradient_h_A = cell(1,N); gradient_h_B = cell(1,N);
                     for n = 1:N 
                         gradient_h_A{n} = gradient_h_C(n) * data.points(:,n) * data.points(:,n)'; % 计算h函数对A的偏导数
@@ -154,7 +153,7 @@ classdef SimilarityPreservingHash
                     gradient_Rm2_A = zeros(D); gradient_Rm2_B = zeros(1,D); gradient_Rm2_C = 0; % 初始化Rm2对A、B、C的梯度值
                     for j = 1:N
                         gradient_Q_A = zeros(D); gradient_Q_B = zeros(1,D); gradient_Q_C = 0;
-                        sequence = randperm(N-1,floor(percent * (N-1))); Ns = length(sequence);
+                        sequence = randperm(N-1,Ns); 
                         for i = sequence
                             x1_idx = K1(i,j); x2_idx = K2(i,j);
                             gradient_c_A = 4 * (gradient_h_A{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_A{x2_idx} * (h_value(x1_idx) - 0.5)); 
@@ -185,7 +184,7 @@ classdef SimilarityPreservingHash
                     C = C + velocity_Rm_C;
                 end
                 
-                Rm_max = weight1 * sign(c1)' - weight2 * (sum(sign(c2)) ./ (N-1))';
+                Rm_max = weight1 * sign(c1)' - weight2 * (sum(sign(c2)) ./ Ns)';
                 if Rm_max >= 1
                     obj.hypothesis{1+length(obj.hypothesis)} = h_func;
                     obj.alfa = [obj.alfa 1];
@@ -202,7 +201,7 @@ classdef SimilarityPreservingHash
                 weight1 = weight1 .* exp(-1 * current_alfa * sign(c1));
                 weight1 = weight1 ./ (2 * sum(weight1));
                 
-                weight2 = weight2 .* exp(current_alfa * sum(c2) / (N-1));
+                weight2 = weight2 .* exp(current_alfa * sum(c2) / Ns);
                 weight2 = weight2 ./ (2 * sum(weight2));
             end
         end
