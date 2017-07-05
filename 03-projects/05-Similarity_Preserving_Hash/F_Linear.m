@@ -16,7 +16,7 @@ classdef F_Linear
     
     methods
         function y = do(obj,points)
-            y = linear(points,obj.B,obj.C);
+            y = func_linear(points,obj.B,obj.C);
         end
     end
     
