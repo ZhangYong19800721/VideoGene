@@ -51,8 +51,8 @@ classdef SimilarityPreservingHashL1
             weight2 = ones(1,N)./(2*N);  % 无标签数据的权值向量
             momentum = 0.5;              % 初始化动量倍率为0.5
             
-            K1 = repmat(1:N,N-1,1); K2 = repmat((1:N)',1,N); K3 = diag(1:N); 
-            K2 = K2 - K3; K2 = K2(K2~=0); K2 = reshape(K2,N-1,N);
+%             K1 = repmat(1:N,N-1,1); K2 = repmat((1:N)',1,N); K3 = diag(1:N); 
+%             K2 = K2 - K3; K2 = K2(K2~=0); K2 = reshape(K2,N-1,N);
             
             for m = 1:num_weak % 迭代开始
                 ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
@@ -84,8 +84,11 @@ classdef SimilarityPreservingHashL1
                     % 对部分的非标签数据执行弱分类
                     Ns = floor(percent * (N-1)); c2 = zeros(Ns,N);  
                     for j = 1:N
-                        sequence = randperm(N-1,Ns);
-                        c2(:,j) = weak_c.do(data.points(:,K1(sequence,j)),data.points(:,K2(sequence,j)));
+                        sequence = randi(N-1,1,10*Ns); 
+                        sequence = unique(sequence); 
+                        sequence = sequence(sequence~=j);
+                        sequence = sequence(1:Ns);
+                        c2(:,j) = weak_c.do(data.points(:,j*ones(1,Ns)),data.points(:,sequence));
                     end
                     Rm2 = weight2 * (sum(c2) ./ Ns)';
                     
@@ -141,9 +144,12 @@ classdef SimilarityPreservingHashL1
                     gradient_Rm2_B = zeros(1,D); gradient_Rm2_C = 0; % 初始化Rm2对B、C的梯度值
                     for j = 1:N
                         gradient_Q_B = zeros(1,D); gradient_Q_C = 0;
-                        sequence = randperm(N-1,Ns); 
+                        sequence = randi(N-1,1,10*Ns); 
+                        sequence = unique(sequence); 
+                        sequence = sequence(sequence~=j);
+                        sequence = sequence(1:Ns);
                         for i = sequence
-                            x1_idx = K1(i,j); x2_idx = K2(i,j);
+                            x1_idx = j; x2_idx = sequence(i);
                             gradient_c_B = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5)); 
                             gradient_c_C = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
                             
