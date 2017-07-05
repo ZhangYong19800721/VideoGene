@@ -149,7 +149,7 @@ classdef SimilarityPreservingHashL1
                         sequence = sequence(sequence~=j);
                         sequence = sequence(1:Ns);
                         for i = sequence
-                            x1_idx = j; x2_idx = sequence(i);
+                            x1_idx = j; x2_idx = i;
                             gradient_c_B = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5)); 
                             gradient_c_C = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
                             

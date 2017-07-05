@@ -28,7 +28,7 @@ data.similar = similarity;
 
 SPH = SimilarityPreservingHashL1();
 
-SPH = SPH.train(data,64,'semisupervised_partial',0.05,1e-4,1e4,2e-4);
+SPH = SPH.train(data,64,'semisupervised_partial',0.05,1e-4,1e4,2.72e-5);
 
 save('SPH.mat','SPH');
 
