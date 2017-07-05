@@ -17,9 +17,9 @@ classdef SimilarityPreservingHash
     methods
         function obj = train(obj,data,num_weak,select)
             if strcmp(select,'supervised')
-                obj = train_supervised(obj,data,num_weak);
+                obj = train_supervised(obj,data,num_weak,0.05,1e-6,1e4);
             elseif strcmp(select,'semisupervised')
-                obj = train_semisupervised(obj,data,num_weak);
+                obj = train_semisupervised(obj,data,num_weak,0.05,1e-6,1e4);
             elseif strcmp(select,'semisupervised_partial')
                 obj = train_semisupervised_partial(obj,data,num_weak,0.05,1e-6,1e4,0.25);
             else
@@ -36,8 +36,9 @@ classdef SimilarityPreservingHash
             %   num_weak：表示弱分类器的个数
             %   max_it:   最大迭代次数
             %   learn_rate_max: 最大学习速度
-            %   learn_rate_min: 最小学习速度     
-            %
+            %   learn_rate_min: 最小学习速度  
+            %   percent: 非标签数据的使用比率
+
             %   输出：
             %   obj：训练后的SimilarityPreservingHash对象
             
@@ -208,13 +209,16 @@ classdef SimilarityPreservingHash
             end
         end
         
-        function obj = train_semisupervised(obj,data,num_weak)
+        function obj = train_semisupervised(obj,data,num_weak,learn_rate_max,learn_rate_min,max_it)
             %train_semisupervised 训练SimilarityPreservingHash模型
             %   输入：
             %   data：训练数据，data.points表示数据点，data.similar包含[i j
             %         s]'，其中i和j表示point数组的下标，s表示两个元素是否相似。
             %         半监督学习只使用标记为相似的数据对。
             %   num_weak：表示弱分类器的个数
+            %   max_it = 1e4;                % 最大迭代次数
+            %   learn_rate_max = 1e-1;       % 最大学习速度
+            %   learn_rate_min = 1e-6;       % 最小学习速度    
             %
             %   输出：
             %   obj：训练后的SimilarityPreservingHash对象
@@ -225,10 +229,7 @@ classdef SimilarityPreservingHash
             [D,N] = size(data.points);   % D表示数据的维度，N表示数据点个数
             [~,P] = size(data.similar);  % P表示相似数据对的个数
             weight1 = ones(1,P)./(2*P);  % 相似数据对的权值向量
-            weight2 = ones(1,N)./(2*N);  % 无标签数据的权值向量
-            max_it = 1e4;                % 最大迭代次数
-            learn_rate_max = 1e-1;       % 最大学习速度
-            learn_rate_min = 1e-6;       % 最小学习速度            
+            weight2 = ones(1,N)./(2*N);  % 无标签数据的权值向量         
             momentum = 0.5;              % 初始化动量倍率为0.5
             
             K1 = repmat(1:N,N-1,1); K2 = repmat((1:N)',1,N); K3 = diag(1:N); 
@@ -245,7 +246,7 @@ classdef SimilarityPreservingHash
                 f_value  = f_func.do(data.points); % 对所有的数据点计算f函数的值
                 max_f_value = max(f_value);        % 得到最大值
                 min_f_value = min(f_value);        % 得到最小值
-                r = log((1 - 0.999) / 0.999) / min(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
+                r = log((1 - 0.999) / 0.999) / max(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
                 
                 % 找到一个使得（3.22）式中的r最大化的弱分类器
                 velocity_Rm_A = zeros(size(A));
@@ -289,12 +290,15 @@ classdef SimilarityPreservingHash
                     if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                        elseif Rm_window_ave - Rm_window_ave_old < 1e-4
-                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                            if Rm_window_ave - Rm_window_ave_old < 1e-5
-                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
-                                learn_rate_current = learn_rate_min;   
+                        else
+                            r = 1.1 * r;
+                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                                if Rm_window_ave - Rm_window_ave_old < 1e-5
+                                    % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
+                                    learn_rate_current = learn_rate_min;   
+                                end
                             end
                         end
                         Rm_window_ave_old = Rm_window_ave;
@@ -302,6 +306,7 @@ classdef SimilarityPreservingHash
                     
                     description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
                     description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
+                    description = strcat(description, strcat(' Gama: ',num2str(r)));
                     ob = ob.showit([Rm Rm_window_ave]',description);
                     
                     % 计算梯度
@@ -383,12 +388,15 @@ classdef SimilarityPreservingHash
             end
         end
         
-        function obj = train_supervised(obj,data,num_weak)
+        function obj = train_supervised(obj,data,num_weak,learn_rate_max,learn_rate_min,max_it)
             %train_supervised 训练SimilarityPreservingHash模型
             %   输入：
             %   data：训练数据，data.points表示数据点，data.similar包含[i j
             %         s]'，其中i和j表示point数组的下标，s表示两个元素是否相似
             %   num_weak：表示弱分类器的个数
+            %   max_it = 1e4;                % 最大迭代次数
+            %   learn_rate_max = 1e-1;       % 最大学习速度
+            %   learn_rate_min = 1e-6;       % 最小学习速度  
             %
             %   输出：
             %   obj：训练后的SimilarityPreservingHash对象
@@ -397,23 +405,20 @@ classdef SimilarityPreservingHash
             [D,N] = size(data.points);   % D表示数据的维度，N表示数据点个数
             [~,P] = size(data.similar);  % P表示数据对的个数
             weight = ones(1,P) ./ P;     % 权值向量
-            max_it = 1e4;                % 最大迭代次数
-            learn_rate_max = 1e-1;       % 最大学习速度
-            learn_rate_min = 1e-6;       % 最小学习速度            
             momentum = 0.5;              % 初始化动量倍率为0.5
             
             for m = 1:num_weak % 迭代开始
                 ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
-                A = randn(D); %A = eye(D);                      % 将A初始化为一个全0方阵
-                B = randn(1,D); %B = zeros(1,D);                    % 将B初始化
+                A = randn(D);                      % 将A初始化为一个全0方阵
+                B = randn(1,D);                    % 将B初始化
                 f_func = F_Quadratic(A,B,0);       % 初始化f函数
                 f_value = f_func.do(data.points);  % 对所有的数据点计算f函数的值
-                C = -1 * median(f_value); %C = -1 * 50.^2;         % 将C初始化
+                C = -1 * median(f_value);          % 将C初始化
                 f_func = F_Quadratic(A,B,C);       % 初始化f函数
                 f_value  = f_func.do(data.points); % 对所有的数据点计算f函数的值
                 max_f_value = max(f_value);        % 得到最大值
                 min_f_value = min(f_value);        % 得到最小值
-                r = log((1 - 0.999) / 0.999) / min(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
+                r = log((1 - 0.9999) / 0.9999) / max(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
                 
                 % 找到一个使得（3.22）式中的r最大化的弱分类器
                 velocity_Rm_A = zeros(size(A));
@@ -421,8 +426,12 @@ classdef SimilarityPreservingHash
                 velocity_Rm_C = zeros(size(C));
                 learn_rate_current = learn_rate_max;                % 学习速度初始化为最大学习速度
                 Rm_record = ones(1,ob_window_size); flag = false;   % Rm_record用来记录迭代过程中的Rm值
+                A_record = repmat(A,1,1,ob_window_size);
+                B_record = repmat(B,1,1,ob_window_size);
+                C_record = repmat(C,1,1,ob_window_size);
+                Rm_window_ave_max = -inf;
                 
-                for it = 1:max_it                    
+                for it = 0:max_it                    
                     f_func = F_Quadratic(A,B,C);       % 更新f函数
                     h_func = H_Func(f_func,r);         % 绑定gamma参数，得到h函数（或更新h函数）
                     weak_c = WeakClassifier(h_func);   % 绑定h函数，得到弱分类器（或更新弱分类器）
@@ -440,25 +449,38 @@ classdef SimilarityPreservingHash
                     end
                     
                     Rm_record(mod(it,ob_window_size)+1) = Rm; % 记录当前的Rm值到Rm_record数组中
+                    A_record(:,:,mod(it,ob_window_size)+1) = A;
+                    B_record(:,:,mod(it,ob_window_size)+1) = B;
+                    C_record(:,:,mod(it,ob_window_size)+1) = C;
                     Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
                     
-                    if mod(it,ob_window_size) == 0            % 如果到达窗口的末端
+                    description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
+                    description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
+                    description = strcat(description, strcat(' Gama: ',num2str(r)));
+                    ob = ob.showit([Rm Rm_window_ave]',description);
+                    
+                    if mod(it,ob_window_size) == (ob_window_size-1)            % 如果到达窗口的末端
                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                        elseif Rm_window_ave - Rm_window_ave_old < 1e-4
-                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-                            if Rm_window_ave - Rm_window_ave_old < 1e-5
-                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/1000就停止
-                                learn_rate_current = learn_rate_min;   
+                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                            [~,best_idx] = max(Rm_record);
+                            A = A_record(:,:,best_idx);
+                            B = B_record(:,:,best_idx);
+                            C = C_record(:,:,best_idx);
+                            Rm_window_ave_old = Rm_window_ave;
+                            continue;
+                        else
+                            if Rm_window_ave > Rm_window_ave_max
+                                r = 1.1 * r;
+                                Rm_window_ave_max = Rm_window_ave;
+                            end
+                            
+                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
                             end
                         end
                         Rm_window_ave_old = Rm_window_ave;
                     end
-                    
-                    description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
-                    description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
-                    ob = ob.showit([Rm Rm_window_ave]',description);
                     
                     % 计算梯度
                     h_value       = h_func.do(data.points);         % 计算所有数据点的h函数值

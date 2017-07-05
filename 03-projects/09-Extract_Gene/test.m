@@ -4,14 +4,14 @@ close all;
 rng('shuffle')
 load sph.mat;
 
-M = 2e4;
+M = 1e4;
 points = 100 * rand(2,M);
 code = sph.hashcode(points);
 
 query = 100 * rand(2,1);
 query_code = sph.hashcode(query);
 query_code = repmat(query_code,1,M);
-match_idx = (sph.alfa * xor(query_code,code)) <= 0;
+match_idx = (sph.alfa * xor(query_code,code)) <= 0.1;
 
 figure;
 plot(points(1,:),points(2,:),'go');
