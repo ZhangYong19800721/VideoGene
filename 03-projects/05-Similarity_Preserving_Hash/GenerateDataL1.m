@@ -1,4 +1,4 @@
-function [points,similar] = GenerateData(N)
+function [points,similar] = GenerateDataL1(N)
 %GENERATEDATA 产生训练数据
 %   
     points = floor(200 * rand(2,N));

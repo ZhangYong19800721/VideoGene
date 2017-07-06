@@ -233,9 +233,6 @@ classdef SimilarityPreservingHashL1
             weight2 = ones(1,N)./(2*N);  % 无标签数据的权值向量         
             momentum = 0.5;              % 初始化动量倍率为0.5
             
-            K1 = repmat(1:N,N-1,1); K2 = repmat((1:N)',1,N); K3 = diag(1:N); 
-            K2 = K2 - K3; K2 = K2(K2~=0); K2 = reshape(K2,N-1,N);
-            
             for m = 1:num_weak % 迭代开始
                 ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
                 B = randn(1,D);                    % 将B初始化
@@ -266,7 +263,8 @@ classdef SimilarityPreservingHashL1
                     % 对所有的非标签数据执行弱分类
                     c2 = zeros(N-1,N);
                     for j = 1:N
-                        c2(:,j) = weak_c.do(data.points(:,K1(:,j)),data.points(:,K2(:,j))); 
+                        sequence = [1:(j-1) (j+1):N];
+                        c2(:,j) = weak_c.do(data.points(:,j*ones(1,N-1)),data.points(:,sequence)); 
                     end
                     Rm2 = weight2 * (sum(c2) ./ (N-1))';
                     
@@ -311,10 +309,10 @@ classdef SimilarityPreservingHashL1
                     
                     gradient_Rm1_B = zeros(1,D); gradient_Rm1_C = 0;
                     for p = 1:P
-                        x1_idx = data.similar(1,p); x2_idx = data.similar(2,p);
+                        i = data.similar(1,p); j = data.similar(2,p);
                         % 计算c函数对B、C的偏导数
-                        gradient_c_B = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5));
-                        gradient_c_C = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
+                        gradient_c_B = 4 * (gradient_h_B{i} * (h_value(j) - 0.5) + gradient_h_B{j} * (h_value(i) - 0.5));
+                        gradient_c_C = 4 * (gradient_h_C(i) * (h_value(j) - 0.5) + gradient_h_C(j) * (h_value(i) - 0.5));
                     
                         gradient_Rm1_B = gradient_Rm1_B + weight1(p) * gradient_c_B;
                         gradient_Rm1_C = gradient_Rm1_C + weight1(p) * gradient_c_C;
@@ -323,10 +321,10 @@ classdef SimilarityPreservingHashL1
                     gradient_Rm2_B = zeros(1,D); gradient_Rm2_C = 0; % 初始化Rm2对B、C的梯度值
                     for j = 1:N
                         gradient_Q_B = zeros(1,D); gradient_Q_C = 0;
-                        for i = 1:(N-1)
-                            x1_idx = K1(i,j); x2_idx = K2(i,j); 
-                            gradient_c_B = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5)); 
-                            gradient_c_C = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
+                        sequence = [1:(j-1) (j+1):N];
+                        for i = sequence
+                            gradient_c_B = 4 * (gradient_h_B{j} * (h_value(i) - 0.5) + gradient_h_B{i} * (h_value(j) - 0.5)); 
+                            gradient_c_C = 4 * (gradient_h_C(j) * (h_value(i) - 0.5) + gradient_h_C(i) * (h_value(j) - 0.5));
                             
                             gradient_Q_B = gradient_Q_B + gradient_c_B;
                             gradient_Q_C = gradient_Q_C + gradient_c_C;
@@ -361,11 +359,18 @@ classdef SimilarityPreservingHashL1
                 obj.hypothesis{1+length(obj.hypothesis)} = h_func;
                 obj.alfa = [obj.alfa current_alfa];
                 
-                weight1 = weight1 .* exp(-1 * current_alfa * sign(c1));
-                weight1 = weight1 ./ (2 * sum(weight1));
+%                 weight1 = weight1 .* exp(-1 * current_alfa * sign(c1));
+%                 weight1 = weight1 ./ (2 * sum(weight1));
+%                 
+%                 weight2 = weight2 .* exp(current_alfa * sum(sign(c2)) / (N-1));
+%                 weight2 = weight2 ./ (2 * sum(weight2));
                 
+                weight1 = weight1 .* exp(-1 * current_alfa * sign(c1));
                 weight2 = weight2 .* exp(current_alfa * sum(sign(c2)) / (N-1));
-                weight2 = weight2 ./ (2 * sum(weight2));
+                
+                total_sum = sum(weight1) + sum(weight2);
+                weight1 = weight1 ./ total_sum;
+                weight2 = weight2 ./ total_sum;
             end
         end
         
