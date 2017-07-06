@@ -72,6 +72,10 @@ classdef SimilarityPreservingHashL1
                 learn_rate_current = learn_rate_max;                % 学习速度初始化为最大学习速度
                 Rm_record = ones(1,ob_window_size); flag = false;   % Rm_record用来记录迭代过程中的Rm值
                 
+                B_record = repmat(B,1,1,ob_window_size);
+                C_record = repmat(C,1,1,ob_window_size);
+                Rm_window_ave_max = -inf;
+                
                 for it = 0:max_it                    
                     f_func = F_Linear(B,C);            % 更新f函数
                     h_func = H_Func(f_func,r);         % 绑定gamma参数，得到h函数（或更新h函数）
@@ -105,17 +109,34 @@ classdef SimilarityPreservingHashL1
                     Rm_record(mod(it,ob_window_size)+1) = Rm; % 记录当前的Rm值到Rm_record数组中
                     Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
                     
+                    B_record(:,:,mod(it,ob_window_size)+1) = B;
+                    C_record(:,:,mod(it,ob_window_size)+1) = C;
+                    
                     description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
                     description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
                     description = strcat(description, strcat(' Gama: ',num2str(r)));
                     ob = ob.showit([Rm Rm_window_ave]',description);
                     
                     if mod(it,ob_window_size) == (ob_window_size-1)            % 如果到达窗口的末端
-                        if Rm_window_ave - Rm_window_ave_old < 0
-                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                        if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降(出现震荡)就降低学习速度
                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                            [best_Rm,best_idx] = max(Rm_record);
+                            B = B_record(:,:,best_idx);
+                            C = C_record(:,:,best_idx);
+                            Rm_window_ave_old = Rm_window_ave;
+                            continue;
+                        else
+                            if Rm_window_ave > Rm_window_ave_max
+                                r = 1.1 * r;
+                                Rm_window_ave_max = Rm_window_ave;
+                            end
+                            
+                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                            end
+                            Rm_window_ave_old = Rm_window_ave;
                         end
-                        Rm_window_ave_old = Rm_window_ave;
                     end
                     
                     % 计算梯度
@@ -384,6 +405,10 @@ classdef SimilarityPreservingHashL1
                 velocity_Rm_C = zeros(size(C));
                 learn_rate_current = learn_rate_max;                % 学习速度初始化为最大学习速度
                 Rm_record = ones(1,ob_window_size); flag = false;   % Rm_record用来记录迭代过程中的Rm值
+                
+                B_record = repmat(B,1,1,ob_window_size);
+                C_record = repmat(C,1,1,ob_window_size);
+                Rm_window_ave_max = -inf;
  
                 for it = 0:max_it                    
                     f_func = F_Linear(B,C);            % 更新f函数
@@ -405,17 +430,34 @@ classdef SimilarityPreservingHashL1
                     Rm_record(mod(it,ob_window_size)+1) = Rm; % 记录当前的Rm值到Rm_record数组中
                     Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
                     
+                    B_record(:,:,mod(it,ob_window_size)+1) = B;
+                    C_record(:,:,mod(it,ob_window_size)+1) = C;
+                    
                     description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
                     description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
                     description = strcat(description, strcat(' Gama: ',num2str(r)));
                     ob = ob.showit([Rm Rm_window_ave]',description);
                     
                     if mod(it,ob_window_size) == (ob_window_size-1)            % 如果到达窗口的末端
-                        if Rm_window_ave - Rm_window_ave_old < 1e-4
-                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                        if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降(出现震荡)就降低学习速度
+                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                            [best_Rm,best_idx] = max(Rm_record);
+                            B = B_record(:,:,best_idx);
+                            C = C_record(:,:,best_idx);
+                            Rm_window_ave_old = Rm_window_ave;
+                            continue;
+                        else
+                            if Rm_window_ave > Rm_window_ave_max
+                                r = 1.1 * r;
+                                Rm_window_ave_max = Rm_window_ave;
+                            end
+                            
+                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                            end
+                            Rm_window_ave_old = Rm_window_ave;
                         end
-                        Rm_window_ave_old = Rm_window_ave;
                     end
                     
                     % 计算梯度
@@ -459,6 +501,7 @@ classdef SimilarityPreservingHashL1
                     break;                   
                 else
                     current_alfa = 0.5 * log((1+Rm_max)/(1-Rm_max));
+                    % current_alfa = 1;
                 end
                 
                 obj.hypothesis{1+length(obj.hypothesis)} = h_func;

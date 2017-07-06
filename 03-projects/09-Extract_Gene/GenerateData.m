@@ -7,9 +7,9 @@ function [points,similar] = GenerateData(N)
     N = length(points);
     for i = 1:N
         for j = (i+1):N
-            if abs(points(2,i) - points(2,j)) < 10
+            if points(2,i) < 0 && points(2,j)) < 0
                 similar = [similar [i j +1]'];
-            else
+            elseif points(2,i) >= 0 && points(2,j)) >= 0
                 similar = [similar [i j -1]'];
             end
         end
