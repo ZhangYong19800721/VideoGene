@@ -24,7 +24,7 @@ axis([-100 100 -100 100]);
 for n=1:length(sph.hypothesis)
     B = sph.hypothesis{n}.f_func.B;
     C = sph.hypothesis{n}.f_func.C;
-    ezplot(@(x,y)func_linear_p(x,y,B,C),[-100 100 -100 100]);
+    ezplot(@(x,y)func_linear_2D(x,y,B,C),[-100 100 -100 100]);
 end
 
 grid on;
