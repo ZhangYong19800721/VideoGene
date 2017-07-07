@@ -2,7 +2,7 @@ clear all
 close all
 
 rng(1)
-[points,labels] = GenerateData(500);
+[points,labels] = GenerateData2(5000);
 group1 = points(:,labels==+1);
 group2 = points(:,labels==-1);
 
@@ -15,5 +15,6 @@ data.points = points;
 data.labels = labels;
 
 adaboost_model = AdaBoost();
-adaboost_model = adaboost_model.train(data,2,1e4);
+adaboost_model = adaboost_model.train(data,10,1e-1,1e-3,1e4);
 
+save('adaboost_model.mat','adaboost_model');
