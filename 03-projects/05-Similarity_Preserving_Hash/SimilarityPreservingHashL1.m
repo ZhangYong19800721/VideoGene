@@ -388,7 +388,7 @@ classdef SimilarityPreservingHashL1
             end
         end
         
-        function obj = train_supervised(obj,data,num_weak,learn_rate_max,learn_rate_min,max_it)
+        function obj = train_supervised(obj,data,num_classifier,learn_rate_max,learn_rate_min,max_it)
             %train_supervised 训练SimilarityPreservingHash模型
             %   输入：
             %   data：训练数据，data.points表示数据点，data.similar包含[i j
@@ -407,8 +407,8 @@ classdef SimilarityPreservingHashL1
             weight = ones(1,P) ./ P;     % 权值向量
             momentum = 0.5;              % 初始化动量倍率为0.5
             
-            for m = 1:num_weak % 迭代开始
-                ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
+            for classifier_idx = 1:num_classifier % 迭代开始
+                ob = Observer('R_Value',2,ob_window_size,'legend'); % 初始化一个观察器
                 B = randn(1,D);                    % 将B初始化
                 f_func = F_Linear(B,0);            % 初始化f函数
                 f_value = f_func.do(data.points);  % 对所有的数据点计算f函数的值
@@ -417,116 +417,108 @@ classdef SimilarityPreservingHashL1
                 f_value  = f_func.do(data.points); % 对所有的数据点计算f函数的值
                 max_f_value = max(f_value);        % 得到最大值
                 min_f_value = min(f_value);        % 得到最小值
-                r = log((1 - 0.999) / 0.999) / min(abs(max_f_value),abs(min_f_value)); % 初始化gamma的值
+                %gama = log((1 - 0.999) / 0.999) / min(abs(max_f_value),abs(min_f_value)); % 初始化gama的值
+                gama = 0.1;
                 
                 % 找到一个使得（3.22）式中的r最大化的弱分类器
-                velocity_Rm_B = zeros(size(B));
-                velocity_Rm_C = zeros(size(C));
-                learn_rate_current = learn_rate_max;                % 学习速度初始化为最大学习速度
-                Rm_record = ones(1,ob_window_size); flag = false;   % Rm_record用来记录迭代过程中的Rm值
+                velocity_r_B = zeros(size(B));
+                velocity_r_C = zeros(size(C));
+                learn_rate = learn_rate_max;                % 学习速度初始化为最大学习速度
+                flag = false;                               % r_list用来记录迭代过程中的r值
                 
                 B_record = repmat(B,1,1,ob_window_size);
                 C_record = repmat(C,1,1,ob_window_size);
-                Rm_window_ave_max = -inf;
+                r_ave_max = -inf;
  
                 for it = 0:max_it                    
-                    f_func = F_Linear(B,C);            % 更新f函数
-                    h_func = H_Func(f_func,r);         % 绑定gamma参数，得到h函数（或更新h函数）
-                    weak_c = WeakClassifier(h_func);   % 绑定h函数，得到弱分类器（或更新弱分类器）
+                    f_func = F_Linear(B,C);                  % 更新f函数
+                    h_func = F_Sigmoid(f_func,gama);         % 绑定gama参数，得到h函数（或更新h函数）
+                    weak_c = WeakClassifier(h_func);         % 绑定h函数，得到弱分类器（或更新弱分类器）
                     c = weak_c.do(data.points(:,data.similar(1,:)),data.points(:,data.similar(2,:)));
-                    Rm = sum(weight .* data.similar(3,:) .* c);
+                    r = weight * (data.similar(3,:) .* c)';
                     
-                    if learn_rate_current == learn_rate_min 
+                    if learn_rate == learn_rate_min 
                         break; % 当学习速度下降到最小学习速度时，停止迭代
                     end
                     
                     if flag == false
-                        Rm_record = Rm * Rm_record;   % 利用第一次计算得到的Rm值初始化Rm_record
-                        Rm_window_ave_old = Rm - 100; % 初始化旧的窗口平均值
+                        r_list = r * ones(1,ob_window_size);   % 利用第一次计算得到的r值初始化r_list
+                        r_ave_old = r - 100;                   % 初始化旧的窗口平均值
                         flag = true;
                     end
                     
-                    Rm_record(mod(it,ob_window_size)+1) = Rm; % 记录当前的Rm值到Rm_record数组中
-                    Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
+                    r_list(mod(it,ob_window_size)+1) = r; % 记录当前的r值到r_list中
+                    r_ave_new = mean(r_list);          % 计算r的平均值
                     
                     B_record(:,:,mod(it,ob_window_size)+1) = B;
                     C_record(:,:,mod(it,ob_window_size)+1) = C;
                     
-                    description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
-                    description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
-                    description = strcat(description, strcat(' Gama: ',num2str(r)));
-                    ob = ob.showit([Rm Rm_window_ave]',description);
+                    description = strcat('迭代次数: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
+                    description = strcat(description, strcat(' 学习速率: ',num2str(learn_rate)));
+                    description = strcat(description, strcat(' 目标函数: ',num2str(r)));
+                    description = strcat(description, strcat(' Gama: ',num2str(gama)));
+                    ob = ob.showit([r r_ave_new]',description);
                     
-                    if mod(it,ob_window_size) == (ob_window_size-1)            % 如果到达窗口的末端
-                        if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降(出现震荡)就降低学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
-                            [best_Rm,best_idx] = max(Rm_record);
-                            B = B_record(:,:,best_idx);
-                            C = C_record(:,:,best_idx);
-                            Rm_window_ave_old = Rm_window_ave;
+                    if mod(it,ob_window_size) == (ob_window_size-1)  % 如果到达窗口的末端
+                        if r_ave_new < r_ave_old  % 如果窗口平均值下降(出现震荡)就降低学习速度
+                            learn_rate = max(0.5 * learn_rate,learn_rate_min);
+                            [best_r,best_i] = max(r_list);
+                            B = B_record(:,:,best_i);
+                            C = C_record(:,:,best_i);
+                            r_ave_old = r_ave_new;
                             continue;
                         else
-                            if Rm_window_ave > Rm_window_ave_max
-                                r = 1.1 * r;
-                                Rm_window_ave_max = Rm_window_ave;
-                            end
+%                             if r_ave_new > r_ave_max
+%                                 gama = 1.1 * gama;
+%                                 r_ave_max = r_ave_new;
+%                             end
                             
-                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                            if r_ave_new - r_ave_old < 1e-4
                                 % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                                learn_rate = max(0.5 * learn_rate,learn_rate_min);
                             end
-                            Rm_window_ave_old = Rm_window_ave;
+                            r_ave_old = r_ave_new;
                         end
                     end
                     
                     % 计算梯度
-                    h_value       = h_func.do(data.points);         % 计算所有数据点的h函数值
-                    gradient_h_C  = h_value .* (h_value - 1) * r;   % 计算h函数对C的偏导数
+                    h_value = h_func.do(data.points); % 计算所有数据点的h函数值
+                    gradient_h = h_value .* (h_value - 1) .* gama; % 准备计算h函数的偏导数
                     
-                    %parfor n = 1:N 
-                    for n = 1:N
-                        gradient_h_B{n} = gradient_h_C(n) * data.points(:,n)';                    % 计算h函数对B的偏导数
-                    end
+                    gradient_h_B = repmat(gradient_h',1,D) .* data.points'; % 计算h函数对B的偏导数
+                    gradient_h_C = gradient_h'; % 计算h函数对C的偏导数
                     
-                    %parfor p = 1:P
-                    for p = 1:P
-                        x1_idx = data.similar(1,p); x2_idx = data.similar(2,p);
-                        % 计算c函数对B、C的偏导数
-                        gradient_c_B{p} = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5));
-                        gradient_c_C{p} = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
-                    end
+                    gradient_c_B = 4 * (gradient_h_B(data.similar(1,:),:) .* repmat((h_value(data.similar(2,:)) - 0.5)',1,D) + ...
+                                        gradient_h_B(data.similar(2,:),:) .* repmat((h_value(data.similar(1,:)) - 0.5)',1,D));
+                    gradient_c_C = 4 * (gradient_h_C(data.similar(1,:)) .* (h_value(data.similar(2,:)) - 0.5)' + ...
+                                        gradient_h_C(data.similar(2,:)) .* (h_value(data.similar(1,:)) - 0.5)');
                     
-                    gradient_Rm_B = zeros(1,D); gradient_Rm_C = 0;
-                    %parfor p = 1:P
-                    for p = 1:P
-                        gradient_Rm_B = gradient_Rm_B + weight(p) * data.similar(3,p) * gradient_c_B{p};
-                        gradient_Rm_C = gradient_Rm_C + weight(p) * data.similar(3,p) * gradient_c_C{p};
-                    end
+                    gradient_r_B = sum(repmat((weight .* data.similar(3,:))',1,D) .* gradient_c_B); 
+                    gradient_r_C = (weight .* data.similar(3,:)) * gradient_c_C;
                     
                     momentum = min([momentum * 1.01,0.9]); % 动量倍率最大为0.9，初始值为0.5，大约迭代60步之后动量倍率达到0.9。
-                    velocity_Rm_B = momentum * velocity_Rm_B + learn_rate_current * gradient_Rm_B;
-                    velocity_Rm_C = momentum * velocity_Rm_C + learn_rate_current * gradient_Rm_C;
+                    velocity_r_B = momentum * velocity_r_B + learn_rate * gradient_r_B;
+                    velocity_r_C = momentum * velocity_r_C + learn_rate * gradient_r_C;
                     
-                    B = B + velocity_Rm_B;
-                    C = C + velocity_Rm_C;
+                    B = B + velocity_r_B;
+                    C = C + velocity_r_C;
                 end
                 
-                Rm_max = sum(weight .* data.similar(3,:) .* sign(c));
-                if Rm_max >= 1
+                r_max = sum(weight .* data.similar(3,:) .* sign(c));
+                if r_max >= 1
                     obj.hypothesis{1+length(obj.hypothesis)} = h_func;
                     obj.alfa = [obj.alfa 1];
                     break;
-                elseif Rm_max <= 0
+                elseif r_max <= 0
                     break;                   
                 else
-                    current_alfa = 0.5 * log((1+Rm_max)/(1-Rm_max));
-                    %current_alfa = 1;
+                    alfa = 0.5 * log((1+r_max)/(1-r_max));
                 end
                 
                 obj.hypothesis{1+length(obj.hypothesis)} = h_func;
-                obj.alfa = [obj.alfa current_alfa];
+                obj.alfa = [obj.alfa alfa];
                 
-                weight = weight .* exp(-1 * current_alfa * data.similar(3,:) .* sign(c));
+                weight = weight .* exp(-1 * alfa * data.similar(3,:) .* sign(c));
                 weight = weight ./ sum(weight);
             end
         end

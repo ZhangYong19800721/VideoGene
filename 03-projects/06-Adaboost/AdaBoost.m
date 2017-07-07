@@ -103,7 +103,7 @@ classdef AdaBoost
                     
                     h_value = h_func.do(data.points);
                     gradient_c = 2 .* h_value .* (h_value - 1) .* gama;
-                    gradient_c_B = repmat(gradient_c',1,2) .* data.points';
+                    gradient_c_B = repmat(gradient_c',1,D) .* data.points';
                     gradient_c_C = gradient_c;
                     
                     gradient_r_B = sum(repmat((weight .* data.labels)',1,D) .* gradient_c_B);

@@ -1,22 +1,22 @@
-classdef H_Func
+classdef F_Sigmoid
     %LOGISTIC 逻辑函数，完成公式（3.20）的功能
     %   
     
     properties
         f_func;
-        r;
+        gama;
     end
     
     methods
-        function obj = H_Func(f_func,r)
+        function obj = F_Sigmoid(f_func,gama)
             obj.f_func = f_func;
-            obj.r = r;
+            obj.gama = gama;
         end
     end
     
     methods
         function y = do(obj,points)
-            y = sigmoid(obj.r * obj.f_func.do(points));
+            y = func_sigmoid(obj.gama * obj.f_func.do(points));
         end
     end
     

@@ -10,7 +10,7 @@ data.similar = similar;
 
 sph_L1 = SimilarityPreservingHashL1();
 
-sph_L1 = sph_L1.train(data,10,'supervised',0.05,1e-3,1e4);
+sph_L1 = sph_L1.train(data,10,'supervised',0.1,1e-3,1e4);
 % 'semisupervised'
 % 'semisupervised_partial'
 
