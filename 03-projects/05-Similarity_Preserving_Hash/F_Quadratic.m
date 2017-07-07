@@ -18,7 +18,7 @@ classdef F_Quadratic
     
     methods
         function y = do(obj,points)
-            y = quadratic(points,obj.A,obj.B,obj.C);
+            y = func_quadratic(points,obj.A,obj.B,obj.C);
         end
     end
 end

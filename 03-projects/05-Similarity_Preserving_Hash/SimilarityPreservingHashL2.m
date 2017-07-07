@@ -390,8 +390,8 @@ classdef SimilarityPreservingHashL2
             
             for m = 1:num_weak % 迭代开始
                 ob = Observer('observer',2,ob_window_size,'legend'); % 初始化一个观察器
-                A = randn(D);                      % 将A初始化为一个全0方阵
-                B = randn(1,D);                    % 将B初始化
+                A = eye(D);                      % 将A初始化为一个全0方阵
+                B = ones(1,D);                    % 将B初始化
                 f_func = F_Quadratic(A,B,0);       % 初始化f函数
                 f_value = f_func.do(data.points);  % 对所有的数据点计算f函数的值
                 C = -1 * median(f_value);          % 将C初始化
@@ -407,10 +407,10 @@ classdef SimilarityPreservingHashL2
                 velocity_Rm_C = zeros(size(C));
                 learn_rate_current = learn_rate_max;                % 学习速度初始化为最大学习速度
                 Rm_record = ones(1,ob_window_size); flag = false;   % Rm_record用来记录迭代过程中的Rm值
-                %A_record = repmat(A,1,1,ob_window_size);
-                %B_record = repmat(B,1,1,ob_window_size);
-                %C_record = repmat(C,1,1,ob_window_size);
-                %Rm_window_ave_max = -inf;
+                A_record = repmat(A,1,1,ob_window_size);
+                B_record = repmat(B,1,1,ob_window_size);
+                C_record = repmat(C,1,1,ob_window_size);
+                Rm_window_ave_max = -inf;
                 
                 for it = 0:max_it                    
                     f_func = F_Quadratic(A,B,C);       % 更新f函数
@@ -430,10 +430,10 @@ classdef SimilarityPreservingHashL2
                     end
                     
                     Rm_record(mod(it,ob_window_size)+1) = Rm; % 记录当前的Rm值到Rm_record数组中
-                    %A_record(:,:,mod(it,ob_window_size)+1) = A;
-                    %B_record(:,:,mod(it,ob_window_size)+1) = B;
-                    %C_record(:,:,mod(it,ob_window_size)+1) = C;
                     Rm_window_ave = mean(Rm_record);          % 计算Rm的窗口平均值
+                    A_record(:,:,mod(it,ob_window_size)+1) = A;
+                    B_record(:,:,mod(it,ob_window_size)+1) = B;
+                    C_record(:,:,mod(it,ob_window_size)+1) = C;
                     
                     description = strcat('Iteration: ', strcat(strcat(num2str(it),'/'),num2str(max_it)));
                     description = strcat(description, strcat(' LearnRate: ',num2str(learn_rate_current)));
@@ -441,30 +441,26 @@ classdef SimilarityPreservingHashL2
                     ob = ob.showit([Rm Rm_window_ave]',description);
                     
                     if mod(it,ob_window_size) == (ob_window_size-1)            % 如果到达窗口的末端
-%                         if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
-%                             learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
-%                             % [~,best_idx] = max(Rm_record);
-%                             % A = A_record(:,:,best_idx);
-%                             % B = B_record(:,:,best_idx);
-%                             % C = C_record(:,:,best_idx);
-%                             % Rm_window_ave_old = Rm_window_ave;
-%                             % continue;
-%                         else
-%                             %if Rm_window_ave > Rm_window_ave_max
-%                             %    r = 1.1 * r;
-%                             %    Rm_window_ave_max = Rm_window_ave;
-%                             %end
-%                             
-%                             if Rm_window_ave - Rm_window_ave_old < 1e-4
-%                                 % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-%                                 learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
-%                             end
-%                         end
-                        if Rm_window_ave - Rm_window_ave_old < 1e-4
-                            % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
-                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                        if Rm_window_ave < Rm_window_ave_old  % 如果窗口平均值下降就降低学习速度
+                            learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);
+                                [best_Rm,best_idx] = max(Rm_record);
+                                A = A_record(:,:,best_idx);
+                                B = B_record(:,:,best_idx);
+                                C = C_record(:,:,best_idx);
+                                Rm_window_ave_old = Rm_window_ave;
+                                continue;
+                        else
+                            if Rm_window_ave > Rm_window_ave_max
+                                r = 1.1 * r;
+                                Rm_window_ave_max = Rm_window_ave;
+                            end
+                            
+                            if Rm_window_ave - Rm_window_ave_old < 1e-4
+                                % 如果达到最大迭代次数Rm也不会增加超过当前值的1/100就缩减学习速度
+                                learn_rate_current = max(0.5 * learn_rate_current,learn_rate_min);   
+                            end
+                            Rm_window_ave_old = Rm_window_ave;
                         end
-                        Rm_window_ave_old = Rm_window_ave;
                     end
                     
                     % 计算梯度
@@ -479,11 +475,11 @@ classdef SimilarityPreservingHashL2
                     
                     %parfor p = 1:P
                     for p = 1:P
-                        x1_idx = data.similar(1,p); x2_idx = data.similar(2,p);
+                        i = data.similar(1,p); j = data.similar(2,p);
                         % 计算c函数对A、B、C的偏导数
-                        gradient_c_A{p} = 4 * (gradient_h_A{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_A{x2_idx} * (h_value(x1_idx) - 0.5));
-                        gradient_c_B{p} = 4 * (gradient_h_B{x1_idx} * (h_value(x2_idx) - 0.5) + gradient_h_B{x2_idx} * (h_value(x1_idx) - 0.5));
-                        gradient_c_C{p} = 4 * (gradient_h_C(x1_idx) * (h_value(x2_idx) - 0.5) + gradient_h_C(x2_idx) * (h_value(x1_idx) - 0.5));
+                        gradient_c_A{p} = 4 * (gradient_h_A{i} * (h_value(j) - 0.5) + gradient_h_A{j} * (h_value(i) - 0.5));
+                        gradient_c_B{p} = 4 * (gradient_h_B{i} * (h_value(j) - 0.5) + gradient_h_B{j} * (h_value(i) - 0.5));
+                        gradient_c_C{p} = 4 * (gradient_h_C(i) * (h_value(j) - 0.5) + gradient_h_C(j) * (h_value(i) - 0.5));
                     end
                     
                     gradient_Rm_A = zeros(D); gradient_Rm_B = zeros(1,D); gradient_Rm_C = 0;
