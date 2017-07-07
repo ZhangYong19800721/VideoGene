@@ -520,7 +520,7 @@ classdef SimilarityPreservingHashL1
                     break;                   
                 else
                     current_alfa = 0.5 * log((1+Rm_max)/(1-Rm_max));
-                    % current_alfa = 1;
+                    %current_alfa = 1;
                 end
                 
                 obj.hypothesis{1+length(obj.hypothesis)} = h_func;
@@ -529,6 +529,12 @@ classdef SimilarityPreservingHashL1
                 weight = weight .* exp(-1 * current_alfa * data.similar(3,:) .* sign(c));
                 weight = weight ./ sum(weight);
             end
+        end
+        
+        function obj = sort(obj)
+            M = length(obj.alfa);
+            [obj.alfa,idx] = sort(obj.alfa,'descend');
+            [obj.hypothesis{1:M}] = obj.hypothesis{idx};
         end
         
         function C = hashcode(obj,points)

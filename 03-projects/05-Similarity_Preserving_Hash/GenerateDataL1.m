@@ -7,7 +7,13 @@ function [points,similar] = GenerateDataL1(N)
     N = length(points);
     for i = 1:N
         for j = (i+1):N
-            if abs(points(2,i) - points(2,j)) < 10
+            if points(2,i) > 50 && points(2,j) > 50
+                similar = [similar [i j +1]'];
+            elseif points(2,i) > 0 && points(2,j) > 0 && points(2,i) <= 50 && points(2,j) <= 50
+                similar = [similar [i j +1]'];
+            elseif points(2,i) > -50 && points(2,j) > -50 && points(2,i) <= 0 && points(2,j) <= 0
+                similar = [similar [i j +1]'];
+            elseif points(2,i) > -100 && points(2,j) > -100 && points(2,i) <= -50 && points(2,j) <= -50
                 similar = [similar [i j +1]'];
             else
                 similar = [similar [i j -1]'];
