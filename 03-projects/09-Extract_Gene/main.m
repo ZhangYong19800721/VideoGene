@@ -1,29 +1,27 @@
 clear all;
 close all;
 
-similarity_part01 = csvread('similarity_part01.txt'); 
-similarity_part02 = csvread('similarity_part02.txt'); 
-similarity_part03 = csvread('similarity_part03.txt'); 
-similarity_part04 = csvread('similarity_part04.txt'); 
-similarity_part05 = csvread('similarity_part05.txt'); 
-similarity_part06 = csvread('similarity_part06.txt'); 
-similarity_part07 = csvread('similarity_part07.txt'); 
-similarity_part08 = csvread('similarity_part08.txt');
+[points,similar] = GenerateDataL1(1e3);
 
-similarity = [similarity_part01;
-              similarity_part02;
-              similarity_part03;
-              similarity_part04;
-              similarity_part05;
-              similarity_part06;
-              similarity_part07;
-              similarity_part08];
-          
-similarity = similarity';
+positive_pair = similar(:,similar(3,:)==+1);
+negative_pair = similar(:,similar(3,:)==-1);
 
-load('nucleotides.mat');
+P = [points(:,positive_pair(1,:))' points(:,positive_pair(2,:))'; ...
+     points(:,positive_pair(2,:))' points(:,positive_pair(1,:))'];
+ 
+N = [points(:,negative_pair(1,:))' points(:,negative_pair(2,:))'; ...
+     points(:,negative_pair(2,:))' points(:,negative_pair(1,:))'];
+ 
+Cp = cov(P); Cp = Cp(1:2,3:4);
+Cn = cov(N); Cn = Cn(1:2,3:4);
 
-P = [nucleotide(:,similarity(1,:))' nucleotide(:,similarity(2,:))'];
+sqrt_Cp = sqrtm(Cp);
+sqrt_Cn = sqrtm(Cn);
+
+A = inv(sqrt_Cp) * sqrt_Cn;
+[V,D] = eig(A);
+ 
+ 
 
 
 
