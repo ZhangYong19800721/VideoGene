@@ -23,14 +23,10 @@ similarity = similarity';
 
 load('nucleotides.mat');
 
-data.points = nucleotide;
-data.similar = similarity;
+P = [nucleotide(:,similarity(1,:))' nucleotide(:,similarity(2,:))'];
 
-SPH = SimilarityPreservingHashL1();
 
-SPH = SPH.train(data,64,'semisupervised_partial',0.05,1e-4,1e4,2.72e-5);
 
-save('SPH.mat','SPH');
 
 
 
