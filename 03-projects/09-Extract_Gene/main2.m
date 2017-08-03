@@ -23,11 +23,9 @@ positive_pairs = [similar01;
                   similar07;
                   similar08];
 
-negative_pairs = []; K = 3;
-for n = 1:N
-    dissimilar = [repmat(n,1,K); randperm(N,K)];
-    negative_pairs = [negative_pairs dissimilar];
-end
+positive_pairs = positive_pairs';
+
+negative_pairs = [1:N;randperm(N)];
 
 P = nucleotide(:,positive_pairs(1,:)) - nucleotide(:,positive_pairs(2,:)); P = P';
 N = nucleotide(:,negative_pairs(1,:)) - nucleotide(:,negative_pairs(2,:)); N = N';
@@ -36,8 +34,8 @@ Cp = cov(P);
 Cn = cov(N); 
 
 sqrt_Cp = sqrtm(Cp);
+sqrt_Cp = real(sqrt_Cp);
 sqrt_Cn = sqrtm(Cn);
 
-A = sqrt_Cp \ sqrt_Cn;
-[V,D] = eig(A);
+[V,S] = eigs(sqrt_Cn,sqrt_Cp,10);
 
