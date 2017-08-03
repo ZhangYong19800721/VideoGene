@@ -15,7 +15,7 @@ Cn = cov(N);
 sqrt_Cp = sqrtm(Cp);
 sqrt_Cn = sqrtm(Cn);
 
-A = inv(sqrt_Cp) * sqrt_Cn;
+A = sqrt_Cp \ sqrt_Cn;
 [V,D] = eig(A);
  
  
